@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
     <title>Hespress Blog</title>
@@ -148,13 +148,8 @@
         
         .post-card .card-text {
             color: #555;
+            line-height: 1.6;
             margin-bottom: 1.5rem;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
         
         .post-meta {
@@ -183,7 +178,7 @@
             margin-top: 1rem;
         }
         
-        .featured-label {
+        .featured-tag {
             position: absolute;
             top: 10px;
             right: 10px;
@@ -215,25 +210,25 @@
                         <a class="nav-link active" href="/posts"><i class="fas fa-newspaper mr-1"></i> Posts</a>
                     </li>
                     <!-- Only show Users and Comments links to admin users -->
-                    <li class="nav-item" th:if="${session.isAdmin != null && session.isAdmin == true}">
+                    <li class="nav-item" sec:authorize="hasRole('ADMIN')">
                         <a class="nav-link" href="/users"><i class="fas fa-users mr-1"></i> Users</a>
                     </li>
-                    <li class="nav-item" th:if="${session.isAdmin != null && session.isAdmin == true}">
+                    <li class="nav-item" sec:authorize="hasRole('ADMIN')">
                         <a class="nav-link" href="/comments"><i class="fas fa-comments mr-1"></i> Comments</a>
                     </li>
                 </ul>
                 <!-- User menu with logout -->
                 <ul class="navbar-nav ml-auto">
-                    <li class="nav-item dropdown" th:if="${session.isAuthenticated != null && session.isAuthenticated == true}">
+                    <li class="nav-item dropdown" sec:authorize="isAuthenticated()">
                         <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" 
                            data-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-user mr-1"></i> <span th:text="${session.userName}">User</span>
+                            <i class="fas fa-user mr-1"></i> <span sec:authentication="name">User</span>
                         </a>
                         <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdown">
                             <a class="dropdown-item" href="/auth/logout"><i class="fas fa-sign-out-alt mr-1"></i> Logout</a>
                         </div>
                     </li>
-                    <li class="nav-item" th:unless="${session.isAuthenticated != null && session.isAuthenticated == true}">
+                    <li class="nav-item" sec:authorize="!isAuthenticated()">
                         <a class="nav-link" href="/auth/login"><i class="fas fa-sign-in-alt mr-1"></i> Login</a>
                     </li>
                 </ul>
@@ -244,28 +239,27 @@
     <div class="container">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2>Hespress Blog Posts</h2>
-            <a th:href="@{/posts/new}" class="btn btn-success">
+            <a th:href="@{/posts/new}" class="btn btn-success" sec:authorize="isAuthenticated()">
                 <i class="fas fa-plus mr-1"></i> New Post
             </a>
         </div>
 
-        <!-- Search form -->
-        <div class="row mb-4">
-            <div class="col-md-8">
-                <form th:action="@{/posts}" method="get" class="form-inline">
-                    <div class="input-group w-100">
-                        <input type="text" class="form-control" name="keyword" 
-                               placeholder="Search by title or content" th:value="${keyword}">
-                        <div class="input-group-append">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-search"></i> Search
-                            </button>
-                        </div>
+        <!-- Search Bar -->
+        <div class="mb-4">
+            <form th:action="@{/posts}" method="get" class="form-inline">
+                <div class="input-group w-100">
+                    <input type="text" name="keyword" th:value="${keyword}" class="form-control" 
+                           placeholder="Search posts by title or content...">
+                    <div class="input-group-append">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search mr-1"></i> Search
+                        </button>
                     </div>
-                </form>
-            </div>
-            <div class="col-md-4 text-right">
-                <a th:href="@{/posts}" class="btn btn-secondary" th:if="${keyword != null && keyword != ''}">
+                </div>
+            </form>
+            <!-- Clear search button if keyword exists -->
+            <div th:if="${keyword != null && keyword != ''}" class="text-right mt-2">
+                <a th:href="@{/posts}" class="btn btn-sm btn-secondary">
                     <i class="fas fa-times"></i> Clear Search
                 </a>
             </div>
@@ -279,13 +273,9 @@
         <!-- Blog Post Cards -->
         <div class="row">
             <div class="col-md-4 mb-4" th:each="post : ${posts}">
-                <div class="card post-card h-100">
-                    <!-- Placeholder image - in a real app you might have actual post images -->
-                    <div class="card-img-top d-flex align-items-center justify-content-center bg-light">
-                        <i class="fas fa-newspaper fa-3x text-muted"></i>
-                    </div>
+                <div class="card post-card">
                     <div class="card-body">
-                        <h5 class="card-title" th:text="${post.title}">Post Title</h5>
+                        <h4 class="card-title" th:text="${post.title}">Post Title</h4>
                         
                         <div class="post-meta">
                             <div class="meta-item">
@@ -293,8 +283,8 @@
                                 <span th:text="${post.author}">Author</span>
                             </div>
                             <div class="meta-item">
-                                <i class="far fa-calendar-alt"></i>
-                                <span th:text="${#temporals.format(post.createdAt, 'MMM dd, yyyy')}">Date</span>
+                                <i class="fas fa-calendar-alt"></i>
+                                <span th:text="${#temporals.format(post.createdAt, 'MMM d, yyyy')}">Date</span>
                             </div>
                         </div>
                         
@@ -306,7 +296,7 @@
                             <a th:href="@{/posts/view/{id}(id=${post.id})}" class="btn btn-primary btn-sm">
                                 <i class="fas fa-book-open mr-1"></i> Read More
                             </a>
-                            <div th:if="${session.isAdmin != null && session.isAdmin == true}">
+                            <div sec:authorize="hasRole('ADMIN') or @postSecurity.isAuthor(authentication, ${post.id})">
                                 <a th:href="@{/posts/edit/{id}(id=${post.id})}" class="btn btn-warning btn-sm mr-1">
                                     <i class="fas fa-edit"></i>
                                 </a>
@@ -326,7 +316,7 @@
                     <i class="fas fa-newspaper fa-4x text-muted mb-3"></i>
                     <h4>No Posts Found</h4>
                     <p class="text-muted">There are no blog posts available at the moment.</p>
-                    <a th:href="@{/posts/new}" class="btn btn-primary mt-3">
+                    <a th:href="@{/posts/new}" class="btn btn-primary mt-3" sec:authorize="isAuthenticated()">
                         <i class="fas fa-plus mr-1"></i> Create Your First Post
                     </a>
                 </div>

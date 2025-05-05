@@ -2,8 +2,10 @@ package com.example.blogs.controllers;
 
 import com.example.blogs.Services.JpaPostService;
 import com.example.blogs.models.Post;
-import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -16,7 +18,6 @@ public class PostController {
     @Autowired
     private JpaPostService postService;
 
-    // You have a duplicate mapping, removing the first one
     @GetMapping("/posts")
     public String getAllPosts(Model model,
                               @RequestParam(defaultValue = "0") int page,
@@ -48,35 +49,28 @@ public class PostController {
         return "posts";
     }
 
-    // Show new post form
+    // Show new post form - requires authentication
     @GetMapping("/posts/new")
-    public String showNewPostForm(Model model, HttpSession session) {
-        // Check if user is authenticated
-        if (session.getAttribute("isAuthenticated") == null || 
-            !(boolean) session.getAttribute("isAuthenticated")) {
-            return "redirect:/auth/login";
-        }
-        
+    @PreAuthorize("isAuthenticated()")
+    public String showNewPostForm(Model model) {
         Post post = new Post();
-        // Pre-fill the author field with the current user's name
-        String currentUserName = (String) session.getAttribute("userName");
+        
+        // Get current authenticated user's name
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String currentUserName = authentication.getName();
         post.setAuthor(currentUserName);
         
         model.addAttribute("post", post);
         return "post-form";
     }
 
-    // Create a new post
+    // Create a new post - requires authentication
     @PostMapping("/posts")
-    public String createPost(@ModelAttribute("post") Post post, HttpSession session, RedirectAttributes redirectAttributes) {
-        // Check if user is authenticated
-        if (session.getAttribute("isAuthenticated") == null || 
-            !(boolean) session.getAttribute("isAuthenticated")) {
-            return "redirect:/auth/login";
-        }
-        
-        // Set author to current user's name, overriding any value that might have been submitted
-        String currentUserName = (String) session.getAttribute("userName");
+    @PreAuthorize("isAuthenticated()")
+    public String createPost(@ModelAttribute("post") Post post, RedirectAttributes redirectAttributes) {
+        // Set author to current user's name
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String currentUserName = authentication.getName();
         post.setAuthor(currentUserName);
         
         postService.createPost(post);
@@ -84,50 +78,22 @@ public class PostController {
         return "redirect:/posts";
     }
 
-    // Show edit post form
+    // Show edit post form - requires authentication
     @GetMapping("/posts/edit/{id}")
-    public String showEditPostForm(@PathVariable Long id, Model model, HttpSession session) {
-        // Check if user is authenticated
-        if (session.getAttribute("isAuthenticated") == null || 
-            !(boolean) session.getAttribute("isAuthenticated")) {
-            return "redirect:/auth/login";
-        }
-        
+    @PreAuthorize("isAuthenticated() and (hasRole('ADMIN') or @postSecurity.isAuthor(authentication, #id))")
+    public String showEditPostForm(@PathVariable Long id, Model model) {
         Post post = postService.getPostById(id);
-        
-        // For security, only allow editing if admin or the author of the post
-        boolean isAdmin = session.getAttribute("isAdmin") != null && (boolean) session.getAttribute("isAdmin");
-        String currentUserName = (String) session.getAttribute("userName");
-        
-        if (!isAdmin && !post.getAuthor().equals(currentUserName)) {
-            return "redirect:/posts";
-        }
-        
         model.addAttribute("post", post);
         return "post-form";
     }
 
-    // Update an existing post
+    // Update an existing post - requires authentication
     @PostMapping("/posts/{id}")
+    @PreAuthorize("isAuthenticated() and (hasRole('ADMIN') or @postSecurity.isAuthor(authentication, #id))")
     public String updatePost(@PathVariable Long id, @ModelAttribute("post") Post post, 
-                             HttpSession session, RedirectAttributes redirectAttributes) {
-        // Check if user is authenticated
-        if (session.getAttribute("isAuthenticated") == null || 
-            !(boolean) session.getAttribute("isAuthenticated")) {
-            return "redirect:/auth/login";
-        }
-        
+                             RedirectAttributes redirectAttributes) {
         // Get existing post
         Post existingPost = postService.getPostById(id);
-        
-        // For security, only allow updating if admin or the author of the post
-        boolean isAdmin = session.getAttribute("isAdmin") != null && (boolean) session.getAttribute("isAdmin");
-        String currentUserName = (String) session.getAttribute("userName");
-        
-        if (!isAdmin && !existingPost.getAuthor().equals(currentUserName)) {
-            redirectAttributes.addFlashAttribute("error", "You don't have permission to edit this post");
-            return "redirect:/posts";
-        }
         
         // Keep the original author - users shouldn't be able to change the author
         post.setAuthor(existingPost.getAuthor());
@@ -137,35 +103,18 @@ public class PostController {
         return "redirect:/posts";
     }
 
-    // View a post
+    // View a post - publicly accessible
     @GetMapping("/posts/view/{id}")
     public String viewPost(@PathVariable Long id, Model model) {
         Post post = postService.getPostById(id);
         model.addAttribute("post", post);
-        // Comments are loaded automatically via the @OneToMany relationship in Post
         return "post-view";
     }
 
-    // Delete a post
+    // Delete a post - requires admin or author
     @GetMapping("/posts/delete/{id}")
-    public String deletePost(@PathVariable Long id, HttpSession session, RedirectAttributes redirectAttributes) {
-        // Check if user is authenticated
-        if (session.getAttribute("isAuthenticated") == null || 
-            !(boolean) session.getAttribute("isAuthenticated")) {
-            return "redirect:/auth/login";
-        }
-        
-        Post post = postService.getPostById(id);
-        
-        // For security, only allow deletion if admin or the author of the post
-        boolean isAdmin = session.getAttribute("isAdmin") != null && (boolean) session.getAttribute("isAdmin");
-        String currentUserName = (String) session.getAttribute("userName");
-        
-        if (!isAdmin && !post.getAuthor().equals(currentUserName)) {
-            redirectAttributes.addFlashAttribute("error", "You don't have permission to delete this post");
-            return "redirect:/posts";
-        }
-        
+    @PreAuthorize("isAuthenticated() and (hasRole('ADMIN') or @postSecurity.isAuthor(authentication, #id))")
+    public String deletePost(@PathVariable Long id, RedirectAttributes redirectAttributes) {
         postService.deletePost(id);
         redirectAttributes.addFlashAttribute("success", "Post deleted successfully!");
         return "redirect:/posts";
